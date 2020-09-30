@@ -6,15 +6,13 @@ import (
 	"fmt"
 	"github.com/apparentlymart/go-cidr/cidr"
 	"github.com/garyburd/redigo/redis"
-	"github.com/vearne/go-ping"
+	"myGo/ping"
 	"net"
 	"strconv"
 	"testing"
-	"time"
 )
 
-func Test_ipv6(t *testing.T){
-
+func Test_ipv6(t *testing.T) {
 
 	//ip := "1119"
 	//ip2 := "111A"
@@ -46,7 +44,6 @@ func Test_ipv6(t *testing.T){
 
 	var address string = "240E:005A:6C01:0001:FFFF:FFFF:FFFF:FFFF/111"
 
-
 	_, network, _ := net.ParseCIDR(address)
 	firstIP, lastIP := cidr.AddressRange(network)
 	gotFirstIP := firstIP.String()
@@ -54,9 +51,7 @@ func Test_ipv6(t *testing.T){
 	fmt.Println(gotFirstIP)
 	fmt.Println(gotLastIP)
 
-
 }
-
 
 //ip到数字
 func ip2Long(ip string) uint32 {
@@ -64,26 +59,27 @@ func ip2Long(ip string) uint32 {
 	binary.Read(bytes.NewBuffer(net.ParseIP(ip).To4()), binary.BigEndian, &long)
 	return long
 }
+
 //数字到IP
 func backtoIP4(ipInt int64) string {
 	// need to do two bit shifting and “0xff” masking
 	b0 := strconv.FormatInt((ipInt>>24)&0xff, 10)
 	b1 := strconv.FormatInt((ipInt>>16)&0xff, 10)
 	b2 := strconv.FormatInt((ipInt>>8)&0xff, 10)
-	b3 := strconv.FormatInt(ipInt & 0xff, 10)
+	b3 := strconv.FormatInt(ipInt&0xff, 10)
 	return b0 + "." + b1 + "." + b2 + "." + b3
 }
 
-func Test_ipRange(t *testing.T){
+func Test_ipRange(t *testing.T) {
 	//c, err := redis.Dial("tcp", "192.168.137.129:6379")
 	//if err != nil {
 	//	fmt.Println("Connect to redis error", err)
 	//	return
 	//}
 	//defer c.Close()
-	ipSlice := make([]string,0)
-	ip1 := ip2Long("192.168.20.1")
-	ip2 := ip2Long("192.168.60.255")
+	ipSlice := make([]string, 0)
+	ip1 := ip2Long("61.187.43.1")
+	ip2 := ip2Long("61.187.43.255")
 	x := ip2 - ip1
 	fmt.Println(ip1, ip2, x)
 	if x > 10000 {
@@ -91,7 +87,7 @@ func Test_ipRange(t *testing.T){
 	}
 	for i := ip1; i <= ip2; i++ {
 		i := int64(i)
-		ipSlice = append(ipSlice,backtoIP4(i))
+		ipSlice = append(ipSlice, backtoIP4(i))
 		//_, err = c.Do("SET", backtoIP4(i), 1)
 		//if err != nil {
 		//	fmt.Println("redis set failed:", err)
@@ -100,74 +96,65 @@ func Test_ipRange(t *testing.T){
 	//fmt.Println(ipSlice)
 	ServerPing(ipSlice)
 
-
-
 }
 
-
-
-func ServerPing(ipSlice []string)   {
+func ServerPing(ipSlice []string) {
 	c, err := redis.Dial("tcp", "192.168.137.129:6379")
 	if err != nil {
 		fmt.Println("Connect to redis error", err)
 		return
 	}
 	defer c.Close()
-
-	bp, err := ping.NewBatchPinger(ipSlice, 1, time.Second*1, time.Second*4)
+	c.Do("AUTH", "123456")
+	bp, err := ping.NewBatchPinger(ipSlice, true)
 
 	if err != nil {
 		fmt.Println(err)
 	}
 
-
-	bp.OnFinish = func(stSlice []*ping.Statistics) {
-		for _, st := range stSlice{
-
-			if st.PacketsRecv == 1{
-				count, err := redis.Int(c.Do("HGET", "axe.ops_resource.ping",st.Addr))
+	bp.OnFinish = func(stMap map[string]*ping.Statistics) {
+		for _, st := range stMap {
+			if st.PacketsRecv == 1 {
+				count, err := redis.Int(c.Do("HGET", "axe.ops_resource.ping", st.Addr))
 				if count > 0 {
 					count++
 					if count > 10 {
 						count = 10
 					}
-					c.Do("HSET","axe.ops_resource.ping",st.Addr,count)
+					c.Do("HSET", "axe.ops_resource.ping", st.Addr, count)
 					if count >= 10 {
-						fmt.Printf("IP:%s,可用\n",st.Addr)
+						fmt.Printf("IP:%s,可用\n", st.Addr)
 					}
-				}else {
-					c.Do("HSET","axe.ops_resource.ping",st.Addr,1)
+				} else {
+					c.Do("HSET", "axe.ops_resource.ping", st.Addr, 1)
 				}
 				if err != nil {
 					fmt.Println("redis set failed:", err)
 				}
-			}else {
-				count, err := redis.Int(c.Do("HGET", "axe.ops_resource.ping",st.Addr))
+			} else {
+				count, err := redis.Int(c.Do("HGET", "axe.ops_resource.ping", st.Addr))
 				if count < 0 {
 					count--
 					if count < -10 {
 						count = -10
 					}
-					c.Do("HSET","axe.ops_resource.ping",st.Addr,count)
-					if count <=-10 {
-						fmt.Printf("IP:%s,不可用\n",st.Addr)
+					c.Do("HSET", "axe.ops_resource.ping", st.Addr, count)
+					if count <= -10 {
+						fmt.Printf("IP:%s,不可用\n", st.Addr)
 					}
-				}else {
-					_, err = c.Do("HSET", "axe.ops_resource.ping",st.Addr, -1)
+				} else {
+					_, err = c.Do("HSET", "axe.ops_resource.ping", st.Addr, -1)
 				}
 				if err != nil {
 					fmt.Println("redis set failed:", err)
 				}
 			}
-			//fmt.Printf("\n--- %s ping statistics ---\n", st.Addr)
-			//fmt.Printf("%d packets transmitted, %d packets received, %v%% packet loss\n",
-			//	st.PacketsSent, st.PacketsRecv, st.PacketLoss)
-			//fmt.Printf("round-trip min/avg/max/stddev = %v/%v/%v/%v\n",
-			//	st.MinRtt, st.AvgRtt, st.MaxRtt, st.StdDevRtt)
 		}
-
 	}
-	bp.Run()
+	err = bp.Run()
+	if err != nil {
+		fmt.Printf("run err %v \n", err)
+	}
+	bp.OnFinish(bp.Statistics())
 
 }
-

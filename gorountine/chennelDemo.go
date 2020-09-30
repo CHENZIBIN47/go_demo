@@ -6,26 +6,26 @@ import (
 	"time"
 )
 
-func GetRandom(start,end int) int{
+func GetRandom(start, end int) int {
 	rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	return start + rand.Intn(end - start+1)
+	return start + rand.Intn(end-start+1)
 }
 
-func IsEven(n int) bool{
+func IsEven(n int) bool {
 
 	return n%2 == 0
 }
 
-func IsSx(n int) bool{
+func IsSx(n int) bool {
 
-	a :=n/100
-	b :=n%100/10
-	c := n%10
-	return (a*a*a + b*b*b + c*c*c) ==n
+	a := n / 100
+	b := n % 100 / 10
+	c := n % 10
+	return (a*a*a + b*b*b + c*c*c) == n
 }
 
-func main() {
+func main9() {
 
 	ints := make(chan int, 5)
 	even := make(chan bool, 5)
@@ -33,11 +33,11 @@ func main() {
 
 	go func() {
 		ticker := time.NewTicker(1 * time.Microsecond)
-		for{
+		for {
 			random := GetRandom(100, 999)
 			fmt.Println(random)
-			ints<- random
-			<- ticker.C
+			ints <- random
+			<-ticker.C
 		}
 
 	}()
@@ -47,10 +47,10 @@ func main() {
 		for x := range ints {
 			isEven := IsEven(x)
 
-			even<- isEven
+			even <- isEven
 			if isEven {
 				fmt.Println("o")
-			}else {
+			} else {
 				fmt.Println("j")
 			}
 			if IsSx(x) {
@@ -59,14 +59,12 @@ func main() {
 		}
 	}()
 
-
-
 	go func() {
 		var oddCount, evenCount int
 		for x := range even {
 			if x {
 				evenCount++
-			}else {
+			} else {
 				oddCount++
 			}
 		}
